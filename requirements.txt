@@ -1,10 +1,13 @@
 certifi==2025.1.31
 charset-normalizer==3.4.1
+click==8.1.8
+dotenv==0.9.9
 filelock==3.18.0
 fsspec==2025.3.0
 huggingface-hub==0.29.3
 idna==3.10
 Jinja2==3.1.6
+joblib==1.4.2
 llvmlite==0.44.0
 MarkupSafe==3.0.2
 more-itertools==10.6.0
@@ -27,9 +30,11 @@ nvidia-nvjitlink-cu12==12.4.127
 nvidia-nvtx-cu12==12.4.127
 openai-whisper==20240930
 packaging==24.2
+python-dotenv==1.0.1
 PyYAML==6.0.2
 regex==2024.11.6
 requests==2.32.3
+sacremoses==0.1.1
 safetensors==0.5.3
 sentencepiece==0.2.0
 setuptools==78.0.1

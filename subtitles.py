@@ -76,14 +76,15 @@ def insertar_subtitulos(video_path, srt_path, video_con_subs):
     ]
     subprocess.run(comando, check=True)
 
-
 def menu():
     print("Bienvenido al generador de subtítulos")
-    video = input("Ingrese la ruta del vídeo (video.mp4): ") or "video.mp4"
-    audio = input("Ingrese la ruta para guardar el audio extraído (audio.wav): ") or "audio.wav"
-    srt_original = input("Ingrese la ruta para guardar el archivo SRT original (subtitulos.srt): ") or "subtitulos.srt"
-    srt_traducido = input("Ingrese la ruta para guardar el archivo SRT traducido (subtitulos_en.srt): ") or "subtitulos_en.srt"
-    video_final = input("Ingrese la ruta para guardar el vídeo final con subtítulos (video_con_subs.mp4): ") or "video_con_subs.mp4"
+    print("La carpeta 'media' es el directorio por defecto para los archivos.")
+    print()
+    video = "media/" + (input("Ingrese la ruta del vídeo (video.mp4): ") or "video.mp4")
+    audio = "media/" + (input("Ingrese la ruta para guardar el audio extraído (audio.wav): ") or "audio.wav")
+    srt_original = "media/" + (input("Ingrese la ruta para guardar el archivo SRT original (subtitulos.srt): ") or "subtitulos.srt")
+    srt_traducido = "media/" + (input("Ingrese la ruta para guardar el archivo SRT traducido (subtitulos_en.srt): ") or "subtitulos_en.srt")
+    video_final = "media/" + (input("Ingrese la ruta para guardar el vídeo final con subtítulos (video_con_subs.mp4): ") or "video_con_subs.mp4")
     idioma_destino = input("Ingrese el idioma de destino para la traducción (por defecto 'en'): ") or "en"
     return video, audio, srt_original, srt_traducido, video_final, idioma_destino
 
