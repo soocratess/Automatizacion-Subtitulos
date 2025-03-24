@@ -42,13 +42,6 @@ La estructura de archivos del proyecto es la siguiente:
 ├── README.md
 ├── requirements.txt
 ├── subtitles.py
-└── venv
-    ├── bin
-    ├── include
-    ├── lib
-    ├── lib64 -> lib
-    ├── pyvenv.cfg
-    └── share
 ```
 
 - **config.py:** Se encarga de cargar la configuración sensible (como la API key de OpenAI) desde variables de entorno.
