@@ -1,6 +1,10 @@
 from transformers import pipeline
 import os
-import openai
+from openai import OpenAI
+from subtitle_package.config import OPENAI_API_KEY
+
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 def convertir_tiempo(segundos):
     """
@@ -67,17 +71,16 @@ def traducir_texto_gpt(texto, idioma_destino="en"):
     )
 
     # Llamada a la API de OpenAI
-    respuesta = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",  # O "gpt-4" si tienes acceso
-        messages=[
-            {"role": "system", "content": "Eres un traductor experto."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0  # Pon temperatura 0 para minimizar variaciones en la traducción
-    )
+    respuesta = client.chat.completions.create(model="gpt-3.5-turbo",  # O "gpt-4" si tienes acceso
+    messages=[
+        {"role": "system", "content": "Eres un traductor experto."},
+        {"role": "user", "content": prompt}
+    ],
+    temperature=0  # Pon temperatura 0 para minimizar variaciones en la traducción
+)
 
     # Extraemos el texto traducido
-    texto_traducido = respuesta.choices[0].message["content"].strip()
+    texto_traducido = respuesta.choices[0].message.content.strip()
     return texto_traducido
 
 
