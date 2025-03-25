@@ -1,6 +1,10 @@
 import subprocess
 import whisper
-from transformers import pipeline
+import openai
+from config import OPENAI_API_KEY  # Importa la API key desde el archivo de configuración
+
+# Configurar la API key de OpenAI
+openai.api_key = OPENAI_API_KEY
 
 # Paso 1: Extraer audio del vídeo usando ffmpeg.
 def extraer_audio(video_path, audio_path):
@@ -37,12 +41,24 @@ def generar_srt(transcripcion, srt_path):
             texto = segmento['text'].strip()
             f.write(f"{i}\n{inicio} --> {fin}\n{texto}\n\n")
 
-# Paso 4: Traducir el texto (subtítulos) usando un modelo de Hugging Face.
+# Paso 4: Traducir el texto (subtítulos) usando la API de OpenAI.
 def traducir_texto(texto, idioma_destino="en"):
-    # Utiliza un modelo de traducción de Helsinki-NLP para traducir de español a inglés (o a otro idioma)
-    traductor = pipeline("translation", model=f"Helsinki-NLP/opus-mt-es-{idioma_destino}")
-    resultado = traductor(texto)
-    return resultado[0]['translation_text']
+    prompt = (
+        f"Por favor, traduce el siguiente texto al {idioma_destino} "
+        "teniendo en cuenta el contexto completo y asegurándote de que la traducción sea de alta calidad:\n\n"
+        f"\"{texto}\"\n\n"
+        "Traducción:"
+    )
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",  # O usa "gpt-4" si tienes acceso
+        messages=[
+            {"role": "system", "content": "Eres un traductor profesional que traduce con alta precisión y teniendo en cuenta todo el contexto."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.3,  # Temperatura baja para respuestas deterministas
+    )
+    traduccion = response.choices[0].message['content'].strip()
+    return traduccion
 
 def traducir_srt(srt_path, srt_traducido_path, idioma_destino="en"):
     with open(srt_path, "r", encoding="utf-8") as f:
@@ -78,13 +94,21 @@ def insertar_subtitulos(video_path, srt_path, video_con_subs):
 
 def menu():
     print("Bienvenido al generador de subtítulos")
-    print("La carpeta 'media' es el directorio por defecto para los archivos.")
-    print()
-    video = "media/" + (input("Ingrese la ruta del vídeo (video.mp4): ") or "video.mp4")
-    audio = "media/" + (input("Ingrese la ruta para guardar el audio extraído (audio.wav): ") or "audio.wav")
-    srt_original = "media/" + (input("Ingrese la ruta para guardar el archivo SRT original (subtitulos.srt): ") or "subtitulos.srt")
-    srt_traducido = "media/" + (input("Ingrese la ruta para guardar el archivo SRT traducido (subtitulos_en.srt): ") or "subtitulos_en.srt")
-    video_final = "media/" + (input("Ingrese la ruta para guardar el vídeo final con subtítulos (video_con_subs.mp4): ") or "video_con_subs.mp4")
+    video_input = input("Ingrese la ruta del vídeo (video.mp4): ")
+    video = "media/" + (video_input if video_input else "video.mp4")
+    
+    audio_input = input("Ingrese la ruta para guardar el audio extraído (audio.wav): ")
+    audio = "media/" + (audio_input if audio_input else "audio.wav")
+    
+    srt_original_input = input("Ingrese la ruta para guardar el archivo SRT original (subtitulos.srt): ")
+    srt_original = "media/" + (srt_original_input if srt_original_input else "subtitulos.srt")
+    
+    srt_traducido_input = input("Ingrese la ruta para guardar el archivo SRT traducido (subtitulos_en.srt): ")
+    srt_traducido = "media/" + (srt_traducido_input if srt_traducido_input else "subtitulos_en.srt")
+    
+    video_final_input = input("Ingrese la ruta para guardar el vídeo final con subtítulos (video_con_subs.mp4): ")
+    video_final = "media/" + (video_final_input if video_final_input else "video_con_subs.mp4")
+    
     idioma_destino = input("Ingrese el idioma de destino para la traducción (por defecto 'en'): ") or "en"
     return video, audio, srt_original, srt_traducido, video_final, idioma_destino
 
