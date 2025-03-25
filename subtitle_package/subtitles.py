@@ -1,5 +1,6 @@
 from transformers import pipeline
 import os
+import openai
 
 def convertir_tiempo(segundos):
     """
@@ -48,6 +49,38 @@ def traducir_texto(texto, idioma_destino="en"):
     resultado = traductor(texto)
     return resultado[0]['translation_text']
 
+def traducir_texto_gpt(texto, idioma_destino="en"):
+    """
+    Traduce un texto usando GPT (ChatCompletion).
+    
+    Args:
+        texto (str): Texto a traducir.
+        idioma_destino (str): Código del idioma destino. Ej: "en", "fr", "de", etc.
+    
+    Returns:
+        str: Texto traducido.
+    """
+    # Creamos el prompt de traducción
+    prompt = (
+        f"Por favor, traduce el siguiente texto al idioma '{idioma_destino}':\n\n"
+        f"{texto}"
+    )
+
+    # Llamada a la API de OpenAI
+    respuesta = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",  # O "gpt-4" si tienes acceso
+        messages=[
+            {"role": "system", "content": "Eres un traductor experto."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0  # Pon temperatura 0 para minimizar variaciones en la traducción
+    )
+
+    # Extraemos el texto traducido
+    texto_traducido = respuesta.choices[0].message["content"].strip()
+    return texto_traducido
+
+
 def traducir_srt(srt_path, srt_traducido_path, idioma_destino="en"):
     """
     Traduce un archivo SRT completo línea por línea, conservando el formato de subtítulo.
@@ -72,7 +105,7 @@ def traducir_srt(srt_path, srt_traducido_path, idioma_destino="en"):
         lineas = bloque.split("\n")
         if len(lineas) >= 3:
             texto_original = " ".join(lineas[2:])
-            texto_traducido = traducir_texto(texto_original, idioma_destino)
+            texto_traducido = traducir_texto_gpt(texto_original, idioma_destino)
             bloque_traducido = "\n".join(lineas[:2] + [texto_traducido])
             bloques_traducidos.append(bloque_traducido)
         else:
