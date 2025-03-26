@@ -15,11 +15,14 @@ def insertar_subtitulos(video_path, srt_path, video_con_subs):
     """
     
     comando = [
-        "ffmpeg", "-i", video_path,
-        "-vf", f"subtitles={srt_path}",
-        "-c:a", "copy",
+        "ffmpeg",
+        "-i", video_path,
+        "-i", srt_path,
+        "-c", "copy",
+        "-c:s", "mov_text",
         video_con_subs
     ]
+
     
     print(f"[INFO] Insertando subtítulos en el video: {video_path}")
     subprocess.run(comando, check=True)
