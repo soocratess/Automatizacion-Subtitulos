@@ -56,7 +56,7 @@ def traducir_texto_gpt(texto, idioma_destino="en", contexto_previo="", contexto_
     )
 
     respuesta = client.chat.completions.create(
-        model="gpt-3.5-turbo",  # O "gpt-4", "gpt-4o", etc.
+        model="gpt-4o",  # O "gpt-4", "gpt-4o", etc.
         messages=[
             {
                 "role": "system",
