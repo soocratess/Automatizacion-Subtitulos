@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from openai import OpenAI
 from subtitle_package.config import OPENAI_API_KEY
 from transformers import pipeline
+from tqdm import tqdm
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -77,10 +78,11 @@ class SRTTranslator:
         contexto_previo = self.obtener_contexto_previo(indice)
         contexto_siguiente = self.obtener_contexto_siguiente(indice)
 
-        print(f"[DEBUG] Traduciendo bloque {indice+1}/{self.total_bloques} con contexto ({self.num_contextos} bloques).")
-        print(f"[DEBUG] Contexto previo: {contexto_previo}")
-        print(f"[DEBUG] Texto a traducir: {texto_actual}")
-        print(f"[DEBUG] Contexto siguiente: {contexto_siguiente}")
+        # Posible adaptación para logs
+        # print(f"[DEBUG] Traduciendo bloque {indice+1}/{self.total_bloques} con contexto ({self.num_contextos} bloques).")
+        # print(f"[DEBUG] Contexto previo: {contexto_previo}")
+        # print(f"[DEBUG] Texto a traducir: {texto_actual}")
+        # print(f"[DEBUG] Contexto siguiente: {contexto_siguiente}")
 
         # Llamamos a la función de traducción que nos pasaron en el constructor
         texto_traducido = self.translate_func(
@@ -92,7 +94,10 @@ class SRTTranslator:
 
         # Reconstruir el bloque con las dos primeras líneas (índice y marca de tiempo) y la traducción.
         bloque_traducido = "\n".join(lineas[:2] + [texto_traducido])
-        print(f"[DEBUG] Texto traducido: {bloque_traducido}\n")
+        
+        # Posible adaptación para logs
+        # print(f"[DEBUG] Texto traducido: {bloque_traducido}\n")
+        
         return bloque_traducido
 
     def translate_all(self) -> list:
@@ -104,6 +109,7 @@ class SRTTranslator:
             future_to_index = {
                 executor.submit(self.procesar_bloque, i): i for i in range(self.total_bloques)
             }
+            pbar = tqdm(total=self.total_bloques, desc="Traduciendo bloques")
             for future in as_completed(future_to_index):
                 i = future_to_index[future]
                 try:
@@ -111,7 +117,10 @@ class SRTTranslator:
                 except Exception as e:
                     print(f"[ERROR] Fallo en el bloque {i+1}: {e}")
                     resultados[i] = self.bloques[i]  # fallback: usar el bloque original
+                pbar.update(1)
+            pbar.close()
         return resultados
+
 
     def write_file(self, bloques_traducidos: list):
         """Escribe el contenido traducido en el archivo de salida."""
