@@ -10,3 +10,15 @@ subtitulos.srt
 test.mp4
 
 video_con_subs.mp4
+
+.env
+
+media/
+
+subtitle_package/__pycache__/
+
+chunks/
+
+parser_package/__pycache__/
+
+todo.txt
