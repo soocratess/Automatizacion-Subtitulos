@@ -24,10 +24,10 @@ def menu():
 
 def main():
     video, audio, srt_original, srt_traducido, video_final, idioma_destino = menu()
-    # extraer_audio(video, audio)
-    # transcripcion = transcribir_audio(audio)
-    # generar_srt(transcripcion, srt_original)
-    traducir_srt(srt_original, srt_traducido, idioma_destino, num_contextos=3)
+    extraer_audio(video, audio)
+    transcripcion = transcribir_audio(audio)
+    generar_srt(transcripcion, srt_original)
+    traducir_srt(srt_original, srt_traducido, idioma_destino, num_contextos=3, num_workers=5)
     insertar_subtitulos(video, srt_traducido, video_final)
 
 if __name__ == "__main__":
