@@ -1,6 +1,6 @@
 import subprocess
 
-def insertar_subtitulos(video_path, srt_path, video_con_subs):
+def insertar_subtitulos(video_path, srt_path, video_con_subs, idioma="English"):
     
     """
     Inserta (quema) subtítulos en un video utilizando ffmpeg.
@@ -20,6 +20,7 @@ def insertar_subtitulos(video_path, srt_path, video_con_subs):
         "-i", srt_path,
         "-c", "copy",
         "-c:s", "mov_text",
+        "-metadata:s:s:0", "title="+idioma,
         video_con_subs
     ]
 

@@ -1,5 +1,6 @@
 import os
 import re
+import math
 from tqdm import tqdm
 from pydub import AudioSegment
 from pydub.utils import make_chunks
@@ -108,10 +109,8 @@ def transcribe_chunks(chunk_files, chunk_length_ms, max_workers):
     """
     all_segments = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Crear tareas asignando el índice y la ruta del fragmento
         futures = {executor.submit(transcribe_chunk, i, chunk_file, chunk_length_ms): i 
                    for i, chunk_file in enumerate(chunk_files)}
-        # Utilizar tqdm para mostrar el progreso mientras se completan las tareas
         for future in tqdm(as_completed(futures), total=len(futures), desc="Transcribiendo fragmentos"):
             segments = future.result()
             all_segments.extend(segments)
@@ -130,7 +129,46 @@ def transcribir_audio(audio_path, chunk_length_ms=60000, max_workers=5):
 
     print("[INFO] Transcribiendo cada fragmento en paralelo...")
     segments = transcribe_chunks(chunk_files, chunk_length_ms, max_workers)
-    # Opcional: ordenar los segmentos por tiempo de inicio
     segments.sort(key=lambda seg: seg['start'])
     full_text = " ".join(seg["text"] for seg in segments)
     return {"text": full_text.strip(), "segments": segments}
+
+# --- Nuevas funciones para dividir segmentos largos ---
+
+def split_segment(segment, max_duration=5):
+    """
+    Si la duración del segmento es mayor a max_duration (segundos), lo divide en partes iguales.
+    Reparte el texto en partes iguales (por palabras) para cada subsegmento.
+    """
+    duration = segment['end'] - segment['start']
+    if duration <= max_duration:
+        return [segment]
+    num_subsegments = math.ceil(duration / max_duration)
+    words = segment['text'].split()
+    words_per_segment = math.ceil(len(words) / num_subsegments)
+    subsegments = []
+    for i in range(num_subsegments):
+        new_start = segment['start'] + (duration / num_subsegments) * i
+        new_end = segment['start'] + (duration / num_subsegments) * (i + 1)
+        sub_text_words = words[i * words_per_segment:(i + 1) * words_per_segment]
+        sub_text = " ".join(sub_text_words)
+        subsegments.append({
+            'index': None,  # se asignará luego
+            'start': new_start,
+            'end': new_end,
+            'text': sub_text
+        })
+    return subsegments
+
+def split_long_segments(segments, max_duration=5):
+    """
+    Recorre la lista de segmentos y divide aquellos cuya duración supere max_duration.
+    """
+    new_segments = []
+    for seg in segments:
+        new_segments.extend(split_segment(seg, max_duration))
+    new_segments.sort(key=lambda x: x['start'])
+    # Reasigna los índices secuencialmente
+    for i, seg in enumerate(new_segments, start=1):
+        seg['index'] = i
+    return new_segments

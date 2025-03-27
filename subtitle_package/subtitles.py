@@ -77,7 +77,7 @@ def traducir_texto_gpt(texto, idioma_destino="en", contexto_previo="", contexto_
     texto_traducido = respuesta.choices[0].message.content.strip()
     return texto_traducido
 
-def traducir_srt(srt_path, srt_traducido_path, idioma_destino="en", num_contextos=2, max_workers=5):
+def traducir_srt(srt_path, srt_traducido_path, idioma_destino="en", num_contextos=2, max_workers=3):
     """
     Traduce un archivo SRT completo utilizando la clase SRTTranslator.
     """

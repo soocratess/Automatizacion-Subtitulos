@@ -2,6 +2,7 @@ from subtitle_package.audio import extraer_audio
 from subtitle_package.transcription import transcribir_audio
 from subtitle_package.subtitles import generar_srt, traducir_srt
 from subtitle_package.video import insertar_subtitulos
+from parser_package.parser import parse
 
 def menu():
     print("Bienvenido al generador de subtítulos")
@@ -24,11 +25,12 @@ def menu():
 
 def main():
     video, audio, srt_original, srt_traducido, video_final, idioma_destino = menu()
-#    extraer_audio(video, audio)
-    transcripcion = transcribir_audio("media/chunk_0.wav", chunk_length_ms=60000, max_workers=5)
+    extraer_audio(video, audio)
+    transcripcion = transcribir_audio(audio, chunk_length_ms=60000, max_workers=5)
     generar_srt(transcripcion, srt_original)
-    traducir_srt(srt_original, srt_traducido, idioma_destino, num_contextos=3, max_workers=5)
-    insertar_subtitulos(video, srt_traducido, video_final)
+    traducir_srt(srt_original, srt_traducido, idioma_destino, num_contextos=2, max_workers=2)
+    parse(srt_traducido, srt_traducido)
+    insertar_subtitulos(video, srt_traducido, video_final, idioma=idioma_destino)
 
 if __name__ == "__main__":
     main()

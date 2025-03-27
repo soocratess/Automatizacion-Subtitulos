@@ -18,3 +18,7 @@ media/
 subtitle_package/__pycache__/
 
 chunks/
+
+parser_package/__pycache__/
+
+todo.txt

@@ -1,4 +1,5 @@
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from openai import OpenAI
 from subtitle_package.config import OPENAI_API_KEY
@@ -26,9 +27,7 @@ class SRTTranslator:
         self.idioma_destino = idioma_destino
         self.num_contextos = num_contextos
         self.max_workers = max_workers
-
-        # En vez de importar la función, la recibimos como argumento
-        self.translate_func = translate_func
+        self.translate_func = translate_func  # Función de traducción inyectada
 
         self.bloques = []
         self.total_bloques = 0
@@ -72,17 +71,12 @@ class SRTTranslator:
         bloque = self.bloques[indice]
         lineas = bloque.split("\n")
         if len(lineas) < 3:
+            # Si no tiene al menos índice, tiempo y texto, devolvemos el bloque tal cual.
             return bloque
 
         texto_actual = self.obtener_texto_bloque(bloque)
         contexto_previo = self.obtener_contexto_previo(indice)
         contexto_siguiente = self.obtener_contexto_siguiente(indice)
-
-        # Posible adaptación para logs
-        # print(f"[DEBUG] Traduciendo bloque {indice+1}/{self.total_bloques} con contexto ({self.num_contextos} bloques).")
-        # print(f"[DEBUG] Contexto previo: {contexto_previo}")
-        # print(f"[DEBUG] Texto a traducir: {texto_actual}")
-        # print(f"[DEBUG] Contexto siguiente: {contexto_siguiente}")
 
         # Llamamos a la función de traducción que nos pasaron en el constructor
         texto_traducido = self.translate_func(
@@ -94,20 +88,40 @@ class SRTTranslator:
 
         # Reconstruir el bloque con las dos primeras líneas (índice y marca de tiempo) y la traducción.
         bloque_traducido = "\n".join(lineas[:2] + [texto_traducido])
-        
-        # Posible adaptación para logs
-        # print(f"[DEBUG] Texto traducido: {bloque_traducido}\n")
-        
         return bloque_traducido
+
+    def procesar_bloque_con_retries(self, indice: int, max_retries=30, base_backoff=0.5) -> str:
+        """
+        Procesa un bloque con reintentos usando backoff exponencial en caso de error por límite.
+        """
+        intento = 0
+        while intento < max_retries:
+            try:
+                return self.procesar_bloque(indice)
+            except Exception as e:
+                mensaje = str(e).lower()
+                if "rate limit" in mensaje:
+                    wait_time = base_backoff * (2 ** intento)
+                    print(f"[WARNING] Error rate limit en bloque {indice+1}: {e}. "
+                          f"Reintentando en {wait_time:.2f} segundos...")
+                    time.sleep(wait_time)
+                    intento += 1
+                else:
+                    # Si no es un error de límite, lo lanzamos de nuevo
+                    raise e
+        raise Exception(f"[ERROR] Fallo en el bloque {indice+1} tras {max_retries} intentos.")
 
     def translate_all(self) -> list:
         """
-        Traduce todos los bloques en paralelo usando ThreadPoolExecutor.
+        Traduce todos los bloques en paralelo usando ThreadPoolExecutor,
+        aplicando reintentos con backoff cuando haya errores de límite.
         """
         resultados = [None] * self.total_bloques
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Programamos cada bloque para procesarlo en paralelo
             future_to_index = {
-                executor.submit(self.procesar_bloque, i): i for i in range(self.total_bloques)
+                executor.submit(self.procesar_bloque_con_retries, i): i
+                for i in range(self.total_bloques)
             }
             pbar = tqdm(total=self.total_bloques, desc="Traduciendo bloques")
             for future in as_completed(future_to_index):
@@ -116,11 +130,11 @@ class SRTTranslator:
                     resultados[i] = future.result()
                 except Exception as e:
                     print(f"[ERROR] Fallo en el bloque {i+1}: {e}")
-                    resultados[i] = self.bloques[i]  # fallback: usar el bloque original
+                    # Si falla, dejamos el bloque original sin traducir
+                    resultados[i] = self.bloques[i]
                 pbar.update(1)
             pbar.close()
         return resultados
-
 
     def write_file(self, bloques_traducidos: list):
         """Escribe el contenido traducido en el archivo de salida."""
