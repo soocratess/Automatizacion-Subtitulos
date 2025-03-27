@@ -5,6 +5,7 @@ from pydub import AudioSegment
 from pydub.utils import make_chunks
 from openai import OpenAI
 from subtitle_package.config import OPENAI_API_KEY
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -54,7 +55,6 @@ def parse_srt(srt_text):
     Cada segmento es un diccionario con 'index', 'start', 'end' y 'text'.
     """
     segments = []
-    # El patrón asume que cada segmento se separa por una línea en blanco
     pattern = re.compile(r'(\d+)\s+([\d:,]+)\s+-->\s+([\d:,]+)\s+(.*?)(?=\n\n|\Z)', re.DOTALL)
     matches = pattern.findall(srt_text)
     for match in matches:
@@ -83,27 +83,41 @@ def generate_srt(segments):
         srt_lines.append("")  # línea en blanco entre segmentos
     return "\n".join(srt_lines)
 
-def transcribe_chunks(chunk_files, chunk_length_ms=60000):
+def transcribe_chunk(index, chunk_file, chunk_length_ms):
     """
-    Transcribe cada fragmento usando el formato "srt", extrae y ajusta los segmentos.
+    Transcribe un fragmento individual utilizando el formato "srt".
+    Ajusta el offset en función del índice del fragmento.
+    """
+    with open(chunk_file, "rb") as audio_file:
+        srt_text = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            response_format="srt"
+        )
+    segments = parse_srt(srt_text)
+    # Calcular el offset en segundos para este fragmento
+    chunk_offset = index * (chunk_length_ms / 1000.0)
+    for seg in segments:
+        seg['start'] += chunk_offset
+        seg['end'] += chunk_offset
+    return segments
+
+def transcribe_chunks(chunk_files, chunk_length_ms, max_workers):
+    """
+    Transcribe cada fragmento en paralelo usando un ThreadPoolExecutor.
     """
     all_segments = []
-    for i, chunk_file in enumerate(tqdm(chunk_files, desc="Transcribiendo fragmentos")):
-        with open(chunk_file, "rb") as audio_file:
-            srt_text = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                response_format="srt"
-            )
-        segments = parse_srt(srt_text)  # Función que extrae los segmentos del SRT
-        chunk_offset = i * (chunk_length_ms / 1000.0)
-        for seg in segments:
-            seg['start'] += chunk_offset
-            seg['end'] += chunk_offset
-            all_segments.append(seg)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Crear tareas asignando el índice y la ruta del fragmento
+        futures = {executor.submit(transcribe_chunk, i, chunk_file, chunk_length_ms): i 
+                   for i, chunk_file in enumerate(chunk_files)}
+        # Utilizar tqdm para mostrar el progreso mientras se completan las tareas
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Transcribiendo fragmentos"):
+            segments = future.result()
+            all_segments.extend(segments)
     return all_segments
 
-def transcribir_audio(audio_path, chunk_length_ms=60000):
+def transcribir_audio(audio_path, chunk_length_ms=60000, max_workers=5):
     """
     Devuelve un diccionario con la transcripción completa y la lista de segmentos.
     """
@@ -114,7 +128,9 @@ def transcribir_audio(audio_path, chunk_length_ms=60000):
     print("[INFO] Guardando fragmentos en disco...")
     chunk_files = save_chunks(chunks, "chunks")
 
-    print("[INFO] Transcribiendo cada fragmento...")
-    segments = transcribe_chunks(chunk_files, chunk_length_ms)
+    print("[INFO] Transcribiendo cada fragmento en paralelo...")
+    segments = transcribe_chunks(chunk_files, chunk_length_ms, max_workers)
+    # Opcional: ordenar los segmentos por tiempo de inicio
+    segments.sort(key=lambda seg: seg['start'])
     full_text = " ".join(seg["text"] for seg in segments)
     return {"text": full_text.strip(), "segments": segments}
