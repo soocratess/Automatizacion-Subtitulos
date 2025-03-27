@@ -16,3 +16,5 @@ video_con_subs.mp4
 media/
 
 subtitle_package/__pycache__/
+
+chunks/

@@ -1,34 +1,120 @@
-import io
 import os
+import re
 from tqdm import tqdm
+from pydub import AudioSegment
+from pydub.utils import make_chunks
 from openai import OpenAI
 from subtitle_package.config import OPENAI_API_KEY
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-class ProgressFileWrapper(io.BufferedReader):
-    def __init__(self, raw, total_size, desc="Subiendo archivo"):
-        super().__init__(raw)
-        self.total_size = total_size
-        self.progress_bar = tqdm(total=total_size, desc=desc, unit='B', unit_scale=True, unit_divisor=1024)
-
-    def read(self, size=-1):
-        chunk = super().read(size)
-        self.progress_bar.update(len(chunk))
-        return chunk
-
-def transcribir_audio(audio_path):
+def split_audio(audio_path, chunk_length_ms):
     """
-    Transcribe un archivo de audio utilizando la API de Whisper de OpenAI.
-
-    Parámetros:
-        audio_path (str): Ruta al archivo de audio a transcribir.
-
-    Retorna:
-        dict: Resultado de la transcripción proporcionado por la API.
+    Divide un archivo de audio en fragmentos de duración especificada (en milisegundos).
     """
-    with open(audio_path, "rb") as audio_file:
-        total_size = os.path.getsize(audio_path)
-        wrapped_file = ProgressFileWrapper(audio_file, total_size)
-        transcript = client.audio.transcriptions.create(model="whisper-1", file=wrapped_file)
-    return transcript
+    audio = AudioSegment.from_file(audio_path)
+    chunks = make_chunks(audio, chunk_length_ms)
+    return chunks
+
+def save_chunks(chunks, output_dir):
+    """
+    Guarda cada fragmento en un archivo WAV y devuelve la lista de rutas.
+    """
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    chunk_files = []
+    for i, chunk in enumerate(chunks):
+        chunk_filename = os.path.join(output_dir, f"chunk_{i}.wav")
+        chunk.export(chunk_filename, format="wav")
+        chunk_files.append(chunk_filename)
+    return chunk_files
+
+def srt_time_to_seconds(srt_time):
+    """
+    Convierte una marca de tiempo SRT (ejemplo "00:00:55,200") a segundos (float).
+    """
+    hours, minutes, sec_millis = srt_time.split(':')
+    seconds, millis = sec_millis.split(',')
+    total = int(hours) * 3600 + int(minutes) * 60 + int(seconds) + int(millis) / 1000.0
+    return total
+
+def seconds_to_srt_time(seconds):
+    """
+    Convierte un número de segundos a una cadena en formato SRT (HH:MM:SS,mmm).
+    """
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    millis = int(round((seconds - int(seconds)) * 1000))
+    return f"{hours:02}:{minutes:02}:{secs:02},{millis:03}"
+
+def parse_srt(srt_text):
+    """
+    Parsea un texto en formato SRT y devuelve una lista de segmentos.
+    Cada segmento es un diccionario con 'index', 'start', 'end' y 'text'.
+    """
+    segments = []
+    # El patrón asume que cada segmento se separa por una línea en blanco
+    pattern = re.compile(r'(\d+)\s+([\d:,]+)\s+-->\s+([\d:,]+)\s+(.*?)(?=\n\n|\Z)', re.DOTALL)
+    matches = pattern.findall(srt_text)
+    for match in matches:
+        index = int(match[0])
+        start = srt_time_to_seconds(match[1])
+        end = srt_time_to_seconds(match[2])
+        text = match[3].strip().replace('\n', ' ')
+        segments.append({
+            'index': index,
+            'start': start,
+            'end': end,
+            'text': text
+        })
+    return segments
+
+def generate_srt(segments):
+    """
+    Genera un string en formato SRT a partir de una lista de segmentos.
+    Los segmentos se renumeran secuencialmente.
+    """
+    srt_lines = []
+    for i, seg in enumerate(segments, start=1):
+        srt_lines.append(str(i))
+        srt_lines.append(f"{seconds_to_srt_time(seg['start'])} --> {seconds_to_srt_time(seg['end'])}")
+        srt_lines.append(seg['text'])
+        srt_lines.append("")  # línea en blanco entre segmentos
+    return "\n".join(srt_lines)
+
+def transcribe_chunks(chunk_files, chunk_length_ms=60000):
+    """
+    Transcribe cada fragmento usando el formato "srt", extrae y ajusta los segmentos.
+    """
+    all_segments = []
+    for i, chunk_file in enumerate(tqdm(chunk_files, desc="Transcribiendo fragmentos")):
+        with open(chunk_file, "rb") as audio_file:
+            srt_text = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                response_format="srt"
+            )
+        segments = parse_srt(srt_text)  # Función que extrae los segmentos del SRT
+        chunk_offset = i * (chunk_length_ms / 1000.0)
+        for seg in segments:
+            seg['start'] += chunk_offset
+            seg['end'] += chunk_offset
+            all_segments.append(seg)
+    return all_segments
+
+def transcribir_audio(audio_path, chunk_length_ms=60000):
+    """
+    Devuelve un diccionario con la transcripción completa y la lista de segmentos.
+    """
+    print("[INFO] Dividiendo el audio en fragmentos...")
+    chunks = split_audio(audio_path, chunk_length_ms)
+    print(f"[INFO] El audio se ha dividido en {len(chunks)} fragmentos.")
+
+    print("[INFO] Guardando fragmentos en disco...")
+    chunk_files = save_chunks(chunks, "chunks")
+
+    print("[INFO] Transcribiendo cada fragmento...")
+    segments = transcribe_chunks(chunk_files, chunk_length_ms)
+    full_text = " ".join(seg["text"] for seg in segments)
+    return {"text": full_text.strip(), "segments": segments}
